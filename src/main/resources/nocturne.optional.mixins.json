@@ -1,0 +1,7 @@
+{
+  "required": false,
+  "package": "dev.nocturne.mixin.optional",
+  "compatibilityLevel": "JAVA_21",
+  "client": ["BackgroundRendererMixin", "AbstractBlockStateMixin", "InGameHudMixin"],
+  "injectors": { "defaultRequire": 0 }
+}

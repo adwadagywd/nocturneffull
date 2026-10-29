@@ -1,0 +1,7 @@
+{
+  "required": true,
+  "package": "dev.nocturne.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "client": ["EntityMixin", "LivingEntityRendererMixin"],
+  "injectors": { "defaultRequire": 1 }
+}

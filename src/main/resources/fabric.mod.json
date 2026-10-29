@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "id": "nocturne",
+  "version": "${version}",
+  "name": "Nocturne",
+  "description": "Dark-themed utility client: tracers, ESP, nametags, hitboxes.",
+  "authors": ["you"],
+  "environment": "client",
+  "entrypoints": { "client": ["dev.nocturne.Nocturne"] },
+  "mixins": ["nocturne.mixins.json", "nocturne.optional.mixins.json"],
+  "depends": {
+    "fabricloader": ">=0.16.9",
+    "minecraft": "~1.21.4",
+    "java": ">=21",
+    "fabric-api": "*"
+  }
+}
