@@ -36,7 +36,7 @@ public class SpeedLines extends Module {
         float dt = last == 0 ? 0.016f : Math.min(0.05f, (now - last) / 1.0e9f);
         last = now;
         Vec3d v = mc.player.getVelocity();
-        double sp = Math.sqrt(v.x * v.x + v.z * v.z + (mc.player.isFallFlying() ? v.y * v.y : 0));
+        double sp = Math.sqrt(v.x * v.x + v.z * v.z + (mc.player.isGliding() ? v.y * v.y : 0));
         float target = (float) MathHelper.clamp((sp - threshold.get()) / 0.6, 0.0, 1.0);
         amt += (target - amt) * (1f - (float) Math.exp(-6f * dt));
         if (amt < 0.02f) return;
