@@ -49,6 +49,8 @@ public final class ModuleManager {
         ALL.add(new Hat());
         ALL.add(new Wings());
         ALL.add(new MagicCircle());
+        ALL.add(new Compass());
+        ALL.add(new BlockEsp());
         // world
         ALL.add(new WorldFog());
         ALL.add(new TimeChanger());

@@ -39,7 +39,7 @@ public class HudModule extends Module {
             int aw = Draw.boldWidth(tr, a);
             int w = aw + Draw.width(tr, b) + 32;
             Draw.shadow(ctx, 6, 6, w, 18, 7);
-            Draw.round(ctx, 6, 6, w, 18, 7, 0xD00B0B0F);
+            if (Theme.glass()) Draw.glassPanel(ctx, 6, 6, w, 18, 7); else Draw.round(ctx, 6, 6, w, 18, 7, 0xD00B0B0F);
             Draw.round(ctx, 13, 12, 6, 6, 3, color(0));
             Draw.bold(ctx, tr, a, 24, 11, color(0), false);
             Draw.rect(ctx, 24 + aw + 6, 11, 1, 8, 0xFF2A2A34);
@@ -63,7 +63,7 @@ public class HudModule extends Module {
             int w = 0;
             for (String s : info) w = Math.max(w, Draw.width(tr, s));
             int h = info.size() * 11 + 6;
-            Draw.round(ctx, 6, y0, w + 14, h, 6, 0xB00B0B0F);
+            if (Theme.glass()) Draw.glassPanel(ctx, 6, y0, w + 14, h, 6); else Draw.round(ctx, 6, y0, w + 14, h, 6, 0xB00B0B0F);
             Draw.round(ctx, 6, y0 + 4, 2, h - 8, 1, color(0));
             for (int i = 0; i < info.size(); i++) Draw.text(ctx, tr, info.get(i), 13, y0 + 4 + i * 11, 0xFFD2D2DC, false);
         }
