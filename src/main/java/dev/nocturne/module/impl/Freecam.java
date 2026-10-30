@@ -9,6 +9,7 @@ import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.DrawContext;
+import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.client.network.OtherClientPlayerEntity;
 import net.minecraft.client.option.GameOptions;
 import net.minecraft.client.option.KeyBinding;
@@ -29,6 +30,7 @@ public class Freecam extends Module {
     private final BoolSetting info = add(new BoolSetting("Show info", true));
 
     private OtherClientPlayerEntity cam;
+    private ClientPlayerEntity owner; // the body we left behind; if it is replaced (respawn) the camera is dropped
     private float savedYaw, savedPitch, cyaw, cpitch;
     private double cx, cy, cz;
     private Vec3d vel = Vec3d.ZERO;
@@ -44,6 +46,7 @@ public class Freecam extends Module {
     @Override
     protected void onEnable() {
         if (mc.player == null || mc.world == null) return;
+        owner = mc.player;
         cam = new OtherClientPlayerEntity(mc.world, mc.player.getGameProfile());
         cx = mc.player.getX(); cy = mc.player.getY(); cz = mc.player.getZ();
         cyaw = savedYaw = mc.player.getYaw();
@@ -56,14 +59,17 @@ public class Freecam extends Module {
 
     @Override
     protected void onDisable() {
-        if (cam != null && mc.player != null) {
+        if (mc.player != null) {
             mc.setCameraEntity(mc.player);
-            mc.player.setYaw(savedYaw);
-            mc.player.setPitch(savedPitch);
-            mc.player.prevYaw = savedYaw;
-            mc.player.prevPitch = savedPitch;
+            if (cam != null && mc.player == owner && cam.getWorld() == mc.world) {
+                mc.player.setYaw(savedYaw);
+                mc.player.setPitch(savedPitch);
+                mc.player.prevYaw = savedYaw;
+                mc.player.prevPitch = savedPitch;
+            }
         }
         cam = null;
+        owner = null;
         KeyBinding.updatePressedStates(); // give the movement keys back
     }
 
@@ -81,6 +87,10 @@ public class Freecam extends Module {
         GameOptions o = mc.options;
         for (KeyBinding k : new KeyBinding[]{o.forwardKey, o.backKey, o.leftKey, o.rightKey,
                 o.jumpKey, o.sneakKey, o.sprintKey, o.attackKey, o.useKey}) k.setPressed(false);
+        // setPressed(false) does not clear clicks that are already queued - without this a click would still
+        // mine / place / use an item using the camera's crosshair target
+        for (KeyBinding k : new KeyBinding[]{o.attackKey, o.useKey, o.pickItemKey, o.dropKey, o.swapHandsKey})
+            while (k.wasPressed()) { /* discard */ }
     }
 
     @Override
@@ -96,7 +106,8 @@ public class Freecam extends Module {
 
     @Override
     public void onFrame() {
-        if (cam == null || mc.player == null || mc.world == null || cam.getWorld() != mc.world) {
+        if (cam == null || mc.player == null || mc.world == null || cam.getWorld() != mc.world
+                || mc.player != owner || !mc.player.isAlive()) {
             setEnabled(false);
             return;
         }
@@ -108,7 +119,11 @@ public class Freecam extends Module {
 
         // Mouse look. Depending on the game version the mouse turns either the player or the camera entity,
         // so read both (see "Mouse source") and put the movement on the camera; the body keeps its rotation.
-        float dyP = mc.player.getYaw() - savedYaw, dpP = mc.player.getPitch() - savedPitch;
+        float dyP = MathHelper.wrapDegrees(mc.player.getYaw() - savedYaw), dpP = mc.player.getPitch() - savedPitch;
+        if (Math.abs(dyP) > 120f || Math.abs(dpP) > 120f) { // not the mouse: the server turned the player - ignore it
+            savedYaw = mc.player.getYaw(); savedPitch = mc.player.getPitch();
+            dyP = 0f; dpP = 0f;
+        }
         float dyC = cam.getYaw() - cyaw, dpC = cam.getPitch() - cpitch;
         float dy = (mouse.is("Camera") ? 0f : dyP) + (mouse.is("Player") ? 0f : dyC);
         float dp = (mouse.is("Camera") ? 0f : dpP) + (mouse.is("Player") ? 0f : dpC);
@@ -155,6 +170,6 @@ public class Freecam extends Module {
         Draw.round(ctx, x, y, w, 18, 7, 0xD00B0B0F);
         Draw.round(ctx, x + 7, y + 6, 6, 6, 3, Theme.accent());
         Draw.bold(ctx, tr, a, x + 18, y + 5, Theme.accent(), false);
-        Draw.text(ctx, tr, b, x + 24 + Draw.boldWidth(tr, a), y + 5, Theme.SOFT, false);
+        Draw.text(ctx, tr, b, x + 24 + Draw.boldWidth(tr, a), y + 5, Theme.soft(), false);
     }
 }

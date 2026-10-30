@@ -22,13 +22,25 @@ public final class Theme {
         int a = t() == null ? 0xEB : (int) (t().opacity.get() * 255);
         return (a << 24) | tint();
     }
-    public static int header() { return 0xF8000000 | mix(0.045f); }
-    public static int rowHover() { return 0xFF000000 | mix(0.09f); }
-    public static int track() { return 0xFF000000 | mix(0.13f); }
-    public static int field() { return 0xFF000000 | mix(0.06f); }
-    public static int fieldFocus() { return 0xFF000000 | mix(0.11f); }
-    public static int border() { return 0x30FFFFFF; }
-    public static int inset() { return 0x66000000; }
+    // ---- glass (iOS-style) ----
+    public static boolean glass() { return t() != null && t().glassOn(); }
+    public static float glassFrost() { return t() == null ? 0.55f : t().glassFrost.getFloat(); }
+    public static float glassShine() { return t() == null ? 0.8f : t().glassShine.getFloat(); }
+    public static boolean glassBlobs() { return t() != null && t().glassBlobs.get(); }
+    public static int glassTint() { return t() == null ? 0x0E1624 : t().bgTint(); }
+
+    public static int text() { return glass() ? 0xFFFFFFFF : TEXT; }
+    public static int soft() { return glass() ? 0xFFE8ECF4 : SOFT; }
+    public static int dim() { return glass() ? 0xB8DDE3EF : DIM; }
+    public static int knob() { return KNOB; }
+
+    public static int header() { return glass() ? 0x14FFFFFF : 0xF8000000 | mix(0.045f); }
+    public static int rowHover() { return glass() ? 0x22FFFFFF : 0xFF000000 | mix(0.09f); }
+    public static int track() { return glass() ? 0x38FFFFFF : 0xFF000000 | mix(0.13f); }
+    public static int field() { return glass() ? 0x1CFFFFFF : 0xFF000000 | mix(0.06f); }
+    public static int fieldFocus() { return glass() ? 0x30FFFFFF : 0xFF000000 | mix(0.11f); }
+    public static int border() { return glass() ? 0x60FFFFFF : 0x30FFFFFF; }
+    public static int inset() { return glass() ? 0x2C000000 : 0x66000000; }
 
     public static float roundness() { return t() == null ? 1f : t().roundness.getFloat(); }
     public static float anim() { return t() == null ? 1f : t().animSpeed.getFloat(); }

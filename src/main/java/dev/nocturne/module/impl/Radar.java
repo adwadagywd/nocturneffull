@@ -41,7 +41,7 @@ public class Radar extends Module {
         double fx = -Math.sin(yaw), fz = Math.cos(yaw), rx = -Math.cos(yaw), rz = -Math.sin(yaw);
 
         Draw.shadow(ctx, x, y, S, S, S / 2f);
-        Draw.panel(ctx, x, y, S, S, S / 2f, 0xD00B0B0F, Theme.border());
+        Draw.surface(ctx, x, y, S, S, S / 2f, 0xD00B0B0F, Theme.border());
         Draw.ring(ctx, cx, cy, R * 0.5, 1, 0x28FFFFFF, 1f);
         Draw.ring(ctx, cx, cy, R, 1, 0x38FFFFFF, 1f);
         Draw.rect(ctx, cx, y + 6, 1, S - 12, 0x18FFFFFF);

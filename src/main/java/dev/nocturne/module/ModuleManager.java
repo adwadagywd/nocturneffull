@@ -46,6 +46,9 @@ public final class ModuleManager {
         ALL.add(new Orbitals());
         ALL.add(new HitBurst());
         ALL.add(new SpeedLines());
+        ALL.add(new Hat());
+        ALL.add(new Wings());
+        ALL.add(new MagicCircle());
         // world
         ALL.add(new WorldFog());
         ALL.add(new TimeChanger());

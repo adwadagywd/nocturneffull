@@ -19,7 +19,7 @@ public class Orbitals extends Module {
     private final NumSetting speed = add(new NumSetting("Speed", 1.4, 0.2, 4.0, 0.1));
     private final NumSetting size = add(new NumSetting("Size", 0.09, 0.03, 0.3, 0.01));
     private final NumSetting tail = add(new NumSetting("Tail length", 14, 0, 30, 1));
-    private final ModeSetting pattern = add(new ModeSetting("Pattern", "Helix", "Helix", "Ring", "Gyro"));
+    private final ModeSetting pattern = add(new ModeSetting("Pattern", "Helix", "Helix", "Ring", "Gyro", "Atom", "Tornado", "Infinity", "Crown", "Pulse"));
     private final ModeSetting colorMode = add(new ModeSetting("Color", "Gradient", "Theme", "Gradient", "Rainbow"));
     private final BoolSetting halo = add(new BoolSetting("Halo", true));
     private final BoolSetting others = add(new BoolSetting("Other players", false));
@@ -44,6 +44,30 @@ public class Orbitals extends Module {
                 double tilt = (i % 2 == 0 ? 1 : -1) * 0.9;
                 double x = Math.cos(a) * r, y = Math.sin(a) * r * Math.sin(tilt), z = Math.sin(a) * r * Math.cos(tilt);
                 return base.add(x, h * 0.55 + y, z);
+            }
+            case "Atom": { // three tilted electron orbits
+                int plane = i % 3;
+                double phi = plane * Math.PI / 3, tilt = 1.0;
+                double u = Math.cos(a) * r, w = Math.sin(a) * r;
+                double y = w * Math.sin(tilt), v = w * Math.cos(tilt);
+                return base.add(u * Math.cos(phi) - v * Math.sin(phi), h * 0.55 + y, u * Math.sin(phi) + v * Math.cos(phi));
+            }
+            case "Tornado": { // funnel that widens towards the top, orbs drift up and down it
+                double yf = 0.5 + 0.5 * Math.sin(time * 0.9 + i * 2.1);
+                double rr = r * (0.35 + 0.9 * yf);
+                return base.add(Math.cos(a * 1.4) * rr, h * (0.05 + 0.95 * yf), Math.sin(a * 1.4) * rr);
+            }
+            case "Infinity": { // figure-eight (lemniscate) around the body, slowly turning
+                double d = 1.0 + Math.sin(a) * Math.sin(a);
+                double x = r * 1.35 * Math.cos(a) / d, z = r * 1.35 * Math.sin(a) * Math.cos(a) / d;
+                double rot = time * 0.4, c = Math.cos(rot), sn = Math.sin(rot);
+                return base.add(x * c - z * sn, h * 0.55 + Math.sin(a * 2) * 0.15, x * sn + z * c);
+            }
+            case "Crown": // tight ring floating above the head
+                return base.add(Math.cos(a) * r * 0.55, h + 0.3 + Math.sin(a * 2 + i) * 0.06, Math.sin(a) * r * 0.55);
+            case "Pulse": { // breathing ring with a wavy edge
+                double rr = r * (0.75 + 0.45 * Math.sin(time * 2.0));
+                return base.add(Math.cos(a) * rr, h * 0.55 + Math.sin(a * 3 + time * 2) * 0.1, Math.sin(a) * rr);
             }
             default: return base.add(Math.cos(a) * r, h * (0.12 + 0.76 * (0.5 + 0.5 * Math.sin(time * 0.8 + i * 1.3))), Math.sin(a) * r);
         }

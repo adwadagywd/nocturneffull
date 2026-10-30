@@ -79,19 +79,19 @@ public class TargetHud extends Module {
         m.scale(sc, sc, 1f);
         Draw.alpha = alpha;
         Draw.shadow(ctx, 0, 0, w, h, 9);
-        Draw.panel(ctx, 0, 0, w, h, 9, Theme.bg(), Theme.border());
+        Draw.surface(ctx, 0, 0, w, h, 9);
         Draw.round(ctx, 7, 9, 3, 18, 1.5f, Theme.accent());
-        Draw.bold(ctx, tr, Draw.trim(tr, last.getName().getString(), w - 62), 15, 8, Theme.TEXT, false);
+        Draw.bold(ctx, tr, Draw.trim(tr, last.getName().getString(), w - 62), 15, 8, Theme.text(), false);
         if (healthText.get()) {
             String s = String.format(Locale.ROOT, "%.1f", hp);
             Draw.text(ctx, tr, s, w - 10 - Draw.width(tr, s), 8, 0xFF000000 | MathHelper.hsvToRgb(ratio * 0.33f, 0.7f, 1f), false);
         }
         Draw.round(ctx, 15, 21, w - 25, 6, 3, Theme.track());
         Draw.round(ctx, 15, 21, Math.max(5, Math.round((w - 25) * ratio)), 6, 3, 0xFF000000 | MathHelper.hsvToRgb(ratio * 0.33f, 0.75f, 1f));
-        if (armorValue.get()) Draw.text(ctx, tr, "Armor " + last.getArmor(), 15, 31, Theme.DIM, false);
+        if (armorValue.get()) Draw.text(ctx, tr, "Armor " + last.getArmor(), 15, 31, Theme.dim(), false);
         if (distance.get()) {
             String d = String.format(Locale.ROOT, "%.1fm", mc.player.distanceTo(last));
-            Draw.text(ctx, tr, d, w - 10 - Draw.width(tr, d), 31, Theme.DIM, false);
+            Draw.text(ctx, tr, d, w - 10 - Draw.width(tr, d), 31, Theme.dim(), false);
         }
         if (row) {
             int cell = 22;

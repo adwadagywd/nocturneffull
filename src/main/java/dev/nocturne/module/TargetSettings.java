@@ -27,7 +27,7 @@ public class TargetSettings {
         passive = m.add(new BoolSetting("Passive mobs", pa));
         items = m.add(new BoolSetting("Items", i));
         if (visual) {
-            colorMode = m.add(new ModeSetting("Color", "Type", "Type", "Health", "Distance", "Custom"));
+            colorMode = m.add(new ModeSetting("Color", "Type", "Type", "Health", "Distance", "Theme", "Rainbow", "Custom"));
             custom = m.add(new ColorSetting("Custom color", 0.0f));
             custom.showIf(() -> colorMode.is("Custom"));
             friendColor = m.add(new ColorSetting("Friend color", 0.40f));
@@ -70,6 +70,8 @@ public class TargetSettings {
                     return MathHelper.hsvToRgb(r * 0.33f, 0.85f, 1f);
                 }
                 case "Custom" -> { return custom.rgb() & 0xFFFFFF; }
+                case "Theme" -> { return dev.nocturne.gui.Theme.accent() & 0xFFFFFF; }
+                case "Rainbow" -> { return MathHelper.hsvToRgb((float) ((System.currentTimeMillis() / 10000.0 + e.getId() * 0.07) % 1.0), 0.7f, 1f); }
                 default -> {}
             }
         }

@@ -18,6 +18,7 @@ public class ThemeModule extends Module {
             new Preset("Rose", 0xFF5C8A, 0xFFB0C8, 0x130A0E),
             new Preset("Gold", 0xF5C542, 0xFFEBA3, 0x13100A),
             new Preset("Mono", 0xE6E6EA, 0xFFFFFF, 0x0D0D0D),
+            new Preset("Glass", 0x66B8FF, 0xE4F2FF, 0x0E1624),
     };
 
     private static String[] names() {
@@ -30,6 +31,10 @@ public class ThemeModule extends Module {
     public final ModeSetting preset = add(new ModeSetting("Preset", "Nocturne", names()));
     public final ColorSetting hue1 = add(new ColorSetting("Accent hue", 0.76f));
     public final ColorSetting hue2 = add(new ColorSetting("Accent 2 hue", 0.88f));
+    public final BoolSetting glassStyle = add(new BoolSetting("Glass material", false));
+    public final NumSetting glassFrost = add(new NumSetting("Glass frost", 0.55, 0.1, 1.0, 0.05));
+    public final NumSetting glassShine = add(new NumSetting("Glass shine", 0.8, 0.0, 1.0, 0.05));
+    public final BoolSetting glassBlobs = add(new BoolSetting("Glass refraction", true));
     public final BoolSetting rainbow = add(new BoolSetting("Rainbow", false));
     public final NumSetting rainbowSpeed = add(new NumSetting("Rainbow speed", 1.0, 0.2, 4.0, 0.1));
     public final NumSetting roundness = add(new NumSetting("Roundness", 1.0, 0.0, 2.0, 0.1));
@@ -50,10 +55,17 @@ public class ThemeModule extends Module {
         hue1.showIf(() -> preset.is("Custom") && !rainbow.get());
         hue2.showIf(() -> preset.is("Custom") && !rainbow.get());
         rainbowSpeed.showIf(rainbow::get);
+        glassStyle.showIf(() -> !preset.is("Glass"));
+        glassFrost.showIf(this::glassOn);
+        glassShine.showIf(this::glassOn);
+        glassBlobs.showIf(this::glassOn);
         fontOffset.showIf(() -> font.is("Custom"));
     }
 
     @Override public boolean persistEnabled() { return false; }
+
+    /** true for the Glass preset, or when "Glass material" is switched on with any other colours */
+    public boolean glassOn() { return preset.is("Glass") || glassStyle.get(); }
 
     public Preset current() {
         for (Preset p : PRESETS) if (preset.is(p.name())) return p;

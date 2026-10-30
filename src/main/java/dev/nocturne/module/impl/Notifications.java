@@ -65,11 +65,11 @@ public class Notifications extends Module {
 
             Draw.alpha = 1f - out * 0.6f;
             Draw.shadow(ctx, x, y, w, h, 9);
-            Draw.panel(ctx, x, y, w, h, 9, Theme.bg(), Theme.border());
+            Draw.surface(ctx, x, y, w, h, 9);
             Draw.round(ctx, x + 6, y + 7, 3, h - 14, 1.5f, col);
             Draw.round(ctx, x + 16, y + 8, 6, 6, 3, col);
-            Draw.bold(ctx, tr, t.title(), x + 28, y + 6, Theme.TEXT, false);
-            Draw.text(ctx, tr, t.msg(), x + 28, y + 17, Theme.DIM, false);
+            Draw.bold(ctx, tr, t.title(), x + 28, y + 6, Theme.text(), false);
+            Draw.text(ctx, tr, t.msg(), x + 28, y + 17, Theme.dim(), false);
         }
         Draw.alpha = 1f;
     }
