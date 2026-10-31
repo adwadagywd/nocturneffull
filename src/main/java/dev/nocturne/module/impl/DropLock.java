@@ -76,10 +76,19 @@ public class DropLock extends Module {
         int left = mc.getWindow().getScaledWidth() / 2 - 91, bottom = mc.getWindow().getScaledHeight();
         for (int i = 0; i < 9; i++) {
             if (!slots[i].get()) continue;
-            int x = left + 3 + i * 20;
-            Draw.round(ctx, x, bottom - 5, 16, 2, 1f, 0xFFFF5C6C);   // red bar under the slot
-            Draw.round(ctx, x + 11, bottom - 17, 5, 5, 1.5f, 0xE0FF5C6C); // small lock body in the corner
-            Draw.round(ctx, x + 12, bottom - 19, 3, 3, 1.5f, 0xE0FFFFFF); // shackle
+            int x = left + 3 + i * 20 + 11, y = bottom - 19; // top-right corner of the slot
+            lock(ctx, x, y);
         }
+    }
+
+    /** tiny 5x7 padlock: shackle on top, body below, keyhole, dark outline so it reads on any item */
+    private static void lock(DrawContext ctx, int x, int y) {
+        Draw.round(ctx, x - 1, y - 1, 7, 9, 1.5f, 0x90000000);
+        int c = 0xFFE9EAF0;
+        Draw.rect(ctx, x + 1, y, 3, 1, c);
+        Draw.rect(ctx, x + 1, y + 1, 1, 2, c);
+        Draw.rect(ctx, x + 3, y + 1, 1, 2, c);
+        Draw.round(ctx, x, y + 3, 5, 4, 1f, c);
+        Draw.rect(ctx, x + 2, y + 4, 1, 2, 0xFF2A2A33);
     }
 }
