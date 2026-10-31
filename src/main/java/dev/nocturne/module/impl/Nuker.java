@@ -32,6 +32,7 @@ import java.util.*;
 public class Nuker extends Module {
     private final ModeSetting breakMode = add(new ModeSetting("Break mode", "Normal", "Normal", "Fast AF"));
     private final NumSetting blocksPerTick = add(new NumSetting("Blocks per tick", 16, 1, 64, 1));
+    private final NumSetting packetLimit = add(new NumSetting("Packet limit /s", 300, 40, 1000, 10));
     private final BoolSetting predict = add(new BoolSetting("Instant remove", true));
     private final BoolSetting flashBlocks = add(new BoolSetting("Break flash", true));
     private final ModeSetting mode = add(new ModeSetting("Mode", "All", "All", "Selected", "Flatten", "Tunnel"));
@@ -57,6 +58,8 @@ public class Nuker extends Module {
     private record Flash(BlockPos pos, long t) {}
     private final Map<BlockPos, Integer> tried = new HashMap<>();
     private final ArrayDeque<Flash> flashes = new ArrayDeque<>();
+    private final int[] sent = new int[20]; // packets sent in each of the last 20 ticks
+    private int budget;
     private int tick, laneTicks;
     private BlockPos lane;
 
@@ -66,6 +69,7 @@ public class Nuker extends Module {
         delay.showIf(() -> !fast());
         blocksPerTick.showIf(this::fast);
         predict.showIf(this::fast);
+        packetLimit.showIf(this::fast);
         blocks.showIf(() -> mode.is("Selected"));
         learn.showIf(() -> mode.is("Selected"));
         blocks.searchable = false;
@@ -74,7 +78,7 @@ public class Nuker extends Module {
 
     private boolean fast() { return breakMode.is("Fast AF"); }
 
-    @Override protected void onEnable() { builtVersion = -1; current = null; timer = 0; lane = null; laneTicks = 0; tried.clear(); flashes.clear(); }
+    @Override protected void onEnable() { builtVersion = -1; current = null; timer = 0; lane = null; laneTicks = 0; tried.clear(); flashes.clear(); java.util.Arrays.fill(sent, 0); }
     @Override protected void onDisable() { current = null; lane = null; tried.clear(); flashes.clear(); }
 
     private void rebuild() {
@@ -206,8 +210,20 @@ public class Nuker extends Module {
     //  - everything slower is mined in a single lane, finished at 78% instead of 100%
     //  Servers with strict anti-cheat can reject this; on vanilla / lax servers it is instant.
     // =====================================================================================
+    /** keeps the break packets under a per-second budget so servers do not kick you for packet spam */
+    private boolean spend(int n) {
+        if (budget < n) return false;
+        budget -= n;
+        sent[tick % 20] += n;
+        return true;
+    }
+
     private void fastTick(MinecraftClient mc, PlayerEntity p) {
         tick++;
+        sent[tick % 20] = 0;
+        int used = 0;
+        for (int v : sent) used += v;
+        budget = packetLimit.getInt() - used - 1; // -1: the arm swing
         tried.values().removeIf(t -> tick - t > 8);
         ClientPlayNetworkHandler net = mc.getNetworkHandler();
         if (net == null) return;
@@ -224,7 +240,7 @@ public class Nuker extends Module {
             if (st.isAir()) continue;
             float delta = creative ? 1f : st.calcBlockBreakingDelta(p, mc.world, pos);
             if (delta >= 0.7f) {
-                if (done >= limit) break;
+                if (done >= limit || !spend(2)) break;
                 if (!creative && autoTool.get()) equipPacket(net, p, st);
                 Direction f = face(eye, pos);
                 net.sendPacket(new PlayerActionC2SPacket(PlayerActionC2SPacket.Action.START_DESTROY_BLOCK, pos, f));
@@ -236,7 +252,7 @@ public class Nuker extends Module {
         if (done > 0) { lane = null; laneTicks = 0; }
         else if (firstSlow != null) laneStep(mc, p, net, firstSlow, eye);
         else lane = null;
-        if ((done > 0 || lane != null) && !swing.is("None")) p.swingHand(Hand.MAIN_HAND);
+        if ((done > 0 || lane != null) && !swing.is("None") && spend(1)) p.swingHand(Hand.MAIN_HAND);
     }
 
     private void laneStep(MinecraftClient mc, PlayerEntity p, ClientPlayNetworkHandler net, BlockPos pos, Vec3d eye) {
@@ -247,13 +263,14 @@ public class Nuker extends Module {
         if (delta <= 0f) { tried.put(pos, tick); return; }
         current = pos;
         if (!pos.equals(lane)) {
+            if (!spend(1)) return;
             lane = pos;
             laneTicks = 0;
             net.sendPacket(new PlayerActionC2SPacket(PlayerActionC2SPacket.Action.START_DESTROY_BLOCK, pos, f));
             return;
         }
         laneTicks++;
-        if (delta * (laneTicks + 1) >= 0.78f) {
+        if (delta * (laneTicks + 1) >= 0.78f && spend(1)) {
             net.sendPacket(new PlayerActionC2SPacket(PlayerActionC2SPacket.Action.STOP_DESTROY_BLOCK, pos, f));
             finishBlock(mc, pos);
             lane = null;
@@ -282,6 +299,8 @@ public class Nuker extends Module {
         if (best != cur) {
             p.getInventory().selectedSlot = best;
             net.sendPacket(new UpdateSelectedSlotC2SPacket(best));
+            sent[tick % 20]++;
+            budget--;
         }
     }
 

@@ -41,6 +41,7 @@ public class TargetSettings {
 
     public boolean test(Entity e) {
         if (e == MinecraftClient.getInstance().player || e.isRemoved()) return false;
+        if (dev.nocturne.module.impl.AntiTrap.hides(e)) return false; // AntiTrap: ignored things are never targeted
         if (e instanceof PlayerEntity) return players.get();
         if (e instanceof Monster) return hostile.get();
         if (e instanceof MobEntity) return passive.get();

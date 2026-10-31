@@ -2,6 +2,6 @@
   "required": false,
   "package": "dev.nocturne.mixin.optional",
   "compatibilityLevel": "JAVA_21",
-  "client": ["BackgroundRendererMixin", "AbstractBlockStateMixin", "InGameHudMixin"],
+  "client": ["BackgroundRendererMixin", "AbstractBlockStateMixin", "InGameHudMixin", "ProjectileUtilMixin", "EntityCollideMixin", "EntityRenderDispatcherMixin", "BlockEntityRenderDispatcherMixin"],
   "injectors": { "defaultRequire": 0 }
 }

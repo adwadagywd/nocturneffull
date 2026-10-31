@@ -51,6 +51,9 @@ public final class ModuleManager {
         ALL.add(new MagicCircle());
         ALL.add(new Compass());
         ALL.add(new BlockEsp());
+        ALL.add(new CustomItemEsp());
+        ALL.add(new AutoDripstone());
+        ALL.add(new AntiTrap());
         // world
         ALL.add(new WorldFog());
         ALL.add(new TimeChanger());

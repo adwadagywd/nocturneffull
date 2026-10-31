@@ -660,7 +660,7 @@ public class ClickGui extends Screen {
         } else if (s instanceof BlockListSetting bl) {
             int cy = y + 3;
             if (bl.searchable) {
-                drawField(ctx, tr, bl, "Search blocks...", x, cy, w, 14, mx, my, act, null);
+                drawField(ctx, tr, bl, bl.searchHint(), x, cy, w, 14, mx, my, act, null);
                 cy += 16;
                 List<String> res = bl.results();
                 int n = Math.min(res.size(), BlockListSetting.MAX_RESULTS);
@@ -674,9 +674,13 @@ public class ClickGui extends Screen {
                     cy += 12;
                 }
                 cy += 2;
-                int bw = (w - 4) / 2;
-                button(ctx, tr, "All ores", x, cy, bw, 14, act, mx, my, Theme.accent(), bl::addAllOres);
-                button(ctx, tr, "Clear", x + bw + 4, cy, bw, 14, act, mx, my, 0xFFFF5C6C, bl::clear);
+                if (bl.presetLabel() != null) {
+                    int bw = (w - 4) / 2;
+                    button(ctx, tr, bl.presetLabel(), x, cy, bw, 14, act, mx, my, Theme.accent(), bl::preset);
+                    button(ctx, tr, "Clear", x + bw + 4, cy, bw, 14, act, mx, my, 0xFFFF5C6C, bl::clear);
+                } else {
+                    button(ctx, tr, "Clear", x, cy, w, 14, act, mx, my, 0xFFFF5C6C, bl::clear);
+                }
                 cy += 18;
             } else {
                 Draw.text(ctx, tr, Draw.trim(tr, bl.hint, w - 4), x + 2, cy + 1, Theme.dim(), false);

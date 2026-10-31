@@ -1,5 +1,6 @@
 package dev.nocturne.mixin.optional;
 
+import dev.nocturne.module.impl.AntiTrap;
 import dev.nocturne.module.impl.Hitboxes;
 import net.minecraft.block.AbstractBlock;
 import net.minecraft.util.shape.VoxelShape;
@@ -17,6 +18,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 public class AbstractBlockStateMixin {
     @Inject(method = "getOutlineShape", at = @At("HEAD"), cancellable = true)
     private void nocturne$webs(CallbackInfoReturnable<VoxelShape> cir) {
-        if (Hitboxes.ignoreWebs((AbstractBlock.AbstractBlockState) (Object) this)) cir.setReturnValue(VoxelShapes.empty());
+        AbstractBlock.AbstractBlockState self = (AbstractBlock.AbstractBlockState) (Object) this;
+        if (Hitboxes.ignoreWebs(self) || AntiTrap.ignoresBlock(self)) cir.setReturnValue(VoxelShapes.empty());
     }
 }

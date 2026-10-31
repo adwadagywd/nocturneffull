@@ -33,6 +33,14 @@ public class BlockListSetting extends Setting<Set<String>> implements Editable {
         return ALL;
     }
 
+    /** the ids this list can search through - subclasses swap in items, enchantments, entities... */
+    protected List<String> ids() { return all(); }
+    public String searchHint() { return "Search blocks..."; }
+    /** label of the quick-fill button; null = no button */
+    public String presetLabel() { return "All ores"; }
+    public void preset() { addAllOres(); }
+    protected String unit() { return "blocks"; }
+
     private static String path(String id) { return id.substring(id.indexOf(':') + 1); }
 
     public void setQuery(String q) { query = q; }
@@ -49,7 +57,7 @@ public class BlockListSetting extends Setting<Set<String>> implements Editable {
         if (!query.equals(cachedQuery)) {
             String q = query.toLowerCase(Locale.ROOT);
             List<String> out = new ArrayList<>();
-            for (String id : all()) if (id.contains(q)) out.add(id);
+            for (String id : ids()) if (id.contains(q)) out.add(id);
             out.sort(Comparator.comparingInt((String id) -> path(id).startsWith(q) ? 0 : 1));
             cached = new ArrayList<>(out.size() > 40 ? out.subList(0, 40) : out);
             cachedQuery = query;
@@ -83,7 +91,7 @@ public class BlockListSetting extends Setting<Set<String>> implements Editable {
         return 42 + n * 12 + m * 11 + (value.size() > m ? 11 : 0);
     }
 
-    @Override public String display() { return value.size() + " blocks"; }
+    @Override public String display() { return value.size() + " " + unit(); }
     @Override public Object save() { return new ArrayList<>(value); }
 
     @Override
