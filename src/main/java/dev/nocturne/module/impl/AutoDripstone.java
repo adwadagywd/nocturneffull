@@ -12,6 +12,7 @@ import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.BlockItem;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
+import net.minecraft.text.Text;
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.Hand;
 import net.minecraft.util.hit.BlockHitResult;
@@ -36,6 +37,7 @@ public class AutoDripstone extends Module {
     private final NumSetting stepTicks = add(new NumSetting("Ticks per step", 1, 1, 5, 1));
     private final BoolSetting needBoth = add(new BoolSetting("Require trapdoor + dripstone in hands", true));
     private final BoolSetting sneakPlace = add(new BoolSetting("Sneak to place", true));
+    private final BoolSetting debug = add(new BoolSetting("Debug (action bar)", false));
 
     private enum Phase { PLACE, OPEN, CLOSE }
 
@@ -43,6 +45,8 @@ public class AutoDripstone extends Module {
     private BlockHitResult anchor;
     private int wait, gate;
     private boolean forcedSneak;
+    private String lastMsg = "";
+    private int cycles;
 
     public AutoDripstone() {
         super("AutoDripstone", "Trapdoor + dripstone: place, open (it falls), close, repeat", Category.WORLD);
@@ -61,6 +65,13 @@ public class AutoDripstone extends Module {
         anchor = null;
         wait = 0;
         gate = 0;
+    }
+
+    /** debug line in the action bar; identical consecutive messages are shown once unless forced */
+    private void say(MinecraftClient mc, String msg, boolean force) {
+        if (!debug.get() || mc.player == null || (!force && msg.equals(lastMsg))) return;
+        lastMsg = msg;
+        mc.player.sendMessage(Text.literal("[AutoDripstone] " + msg), true);
     }
 
     private void releaseSneak() {
@@ -148,16 +159,17 @@ public class AutoDripstone extends Module {
 
     @Override
     public void onTick(MinecraftClient mc) {
-        if (!armed(mc)) { reset(); return; }
+        if (!armed(mc)) { say(mc, "waiting: hold a trapdoor AND dripstone, no screen open", false); reset(); return; }
         PlayerEntity p = mc.player;
 
         BlockHitResult seen = mc.crosshairTarget instanceof BlockHitResult h && h.getType() == HitResult.Type.BLOCK ? trapdoorAt(mc, h) : null;
         if (anchor == null || (seen != null && !seen.getBlockPos().equals(anchor.getBlockPos()))) {
-            if (seen == null) return; // nothing to work on - aim at a trapdoor
+            if (seen == null) { say(mc, "aim at a trapdoor (or the dripstone hanging under it)", false); return; }
             anchor = seen;
             wait = 0;
             gate = 0;
             phase = isOpen(mc) ? Phase.CLOSE : slotHasDrip(mc) ? Phase.OPEN : Phase.PLACE; // continue from what is there
+            say(mc, "trapdoor found, starting with " + phase + " (slot " + slot().toShortString() + ", side " + anchor.getSide() + ")", true);
         }
         if (!isTrapdoor(mc)) { reset(); return; }
 
@@ -167,10 +179,10 @@ public class AutoDripstone extends Module {
         int pause = stepTicks.getInt() - 1;
         switch (phase) {
             case PLACE -> {
-                if (!slotFree(mc) && ++gate < 20) return; // the previous dripstone is still falling
+                if (!slotFree(mc) && ++gate < 20) { say(mc, "waiting: the slot under the trapdoor is not free yet", false); return; } // previous dripstone still falling
                 gate = 0;
                 Hand hand = dripHand(p);
-                if (hand != null) place(mc, p, hand);
+                if (hand != null) say(mc, "#" + (++cycles) + " PLACE -> " + place(mc, p, hand), true);
                 phase = Phase.OPEN;
                 wait = pause;
             }
@@ -181,28 +193,30 @@ public class AutoDripstone extends Module {
                     phase = Phase.PLACE; // nothing hangs there yet (placing failed) - try again
                     wait = pause;
                 } else {
-                    use(mc, Hand.MAIN_HAND, anchor); // opens: the dripstone loses its support and falls
+                    say(mc, "OPEN -> " + use(mc, Hand.MAIN_HAND, anchor), true); // the dripstone loses its support and falls
                     phase = Phase.CLOSE;
                     wait = pause;
                 }
             }
             case CLOSE -> {
-                if (isOpen(mc)) use(mc, Hand.MAIN_HAND, anchor);
+                if (isOpen(mc)) say(mc, "CLOSE -> " + use(mc, Hand.MAIN_HAND, anchor), true);
                 phase = Phase.PLACE;
                 wait = pause;
             }
         }
     }
 
-    private void place(MinecraftClient mc, PlayerEntity p, Hand hand) {
+    private ActionResult place(MinecraftClient mc, PlayerEntity p, Hand hand) {
         boolean was = p.isSneaking();
         if (sneakPlace.get()) p.setSneaking(true); // client side part of the check; the server gets it from the sneak key
-        use(mc, hand, anchor);
+        ActionResult r = use(mc, hand, anchor);
         p.setSneaking(was);
+        return r;
     }
 
-    private void use(MinecraftClient mc, Hand hand, BlockHitResult hit) {
+    private ActionResult use(MinecraftClient mc, Hand hand, BlockHitResult hit) {
         ActionResult r = mc.interactionManager.interactBlock(mc.player, hand, hit);
         if (r.isAccepted()) mc.player.swingHand(hand);
+        return r;
     }
 }
