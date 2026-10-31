@@ -40,6 +40,8 @@ public class BlockListSetting extends Setting<Set<String>> implements Editable {
     public String presetLabel() { return "All ores"; }
     public void preset() { addAllOres(); }
     protected String unit() { return "blocks"; }
+    /** nicer text for a selected entry in the ClickGUI; null = the default (the id) */
+    public String label(String id) { return null; }
 
     private static String path(String id) { return id.substring(id.indexOf(':') + 1); }
 

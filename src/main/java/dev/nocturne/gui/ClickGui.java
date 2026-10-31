@@ -693,7 +693,8 @@ public class ClickGui extends Screen {
             for (int i = 0; i < shownN; i++) {
                 final String id = selected.get(i);
                 boolean hv = act && in(mx, my, x, cy, w, 11);
-                Draw.text(ctx, tr, Draw.trim(tr, pretty(id), w - 16), x + 4, cy + 1, hv ? Theme.text() : Theme.accent(), false);
+                String lbl = bl.label(id);
+                Draw.text(ctx, tr, Draw.trim(tr, lbl != null ? lbl : pretty(id), w - 16), x + 4, cy + 1, hv ? Theme.text() : Theme.accent(), false);
                 Draw.text(ctx, tr, "x", x + w - 9, cy + 1, hv ? 0xFFFF5555 : Theme.dim(), false);
                 if (act) hits.add(new Hit(x, cy, w, 11, (btn, hx, hy) -> bl.toggle(id)));
                 cy += 11;
