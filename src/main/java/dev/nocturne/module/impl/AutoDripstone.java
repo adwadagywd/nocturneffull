@@ -15,14 +15,21 @@ import net.minecraft.util.ActionResult;
 import net.minecraft.util.Hand;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.hit.HitResult;
+import net.minecraft.util.math.Vec3d;
+import net.minecraft.world.RaycastContext;
 
 /**
- * Hold a trapdoor and dripstone, look at a placed trapdoor and do not touch the mouse:
- * the module OPENS the trapdoor, PLACES dripstone, CLOSES the trapdoor - and repeats, as fast as the server allows.
- * (placing against a trapdoor needs sneaking, so the sneak key is pressed for exactly the placing tick)
+ * Hold a trapdoor and dripstone, aim at a placed trapdoor and do not touch the mouse:
+ * OPEN the trapdoor -> PLACE dripstone -> CLOSE the trapdoor -> repeat.
+ *
+ * Where the dripstone goes ("Place at"):
+ *  - Behind trapdoor: once the trapdoor is open the crosshair ray goes through it - the dripstone is placed on
+ *    whatever block you now look at (the ray is recalculated right after the trapdoor opened, so no frame is needed)
+ *  - Trapdoor face: placed against the trapdoor itself (needs sneaking; the sneak key is held for that tick)
  */
 public class AutoDripstone extends Module {
     private final ModeSetting items = add(new ModeSetting("Items", "Both", "Both", "Pointed dripstone", "Dripstone block"));
+    private final ModeSetting placeAt = add(new ModeSetting("Place at", "Behind trapdoor", "Behind trapdoor", "Trapdoor face"));
     private final NumSetting stepTicks = add(new NumSetting("Ticks per step", 1, 1, 5, 1));
     private final BoolSetting needBoth = add(new BoolSetting("Require trapdoor + dripstone in hands", true));
     private final BoolSetting sneakPlace = add(new BoolSetting("Sneak to place", true));
@@ -85,6 +92,15 @@ public class AutoDripstone extends Module {
         return !needBoth.get() || trapdoor(p.getMainHandStack()) || trapdoor(p.getOffHandStack());
     }
 
+    /** block under the crosshair, computed right now from the current world (not from the last rendered frame) */
+    private BlockHitResult ray(MinecraftClient mc) {
+        PlayerEntity p = mc.player;
+        Vec3d from = p.getCameraPosVec(1f);
+        Vec3d to = from.add(p.getRotationVec(1f).multiply(4.5));
+        BlockHitResult r = mc.world.raycast(new RaycastContext(from, to, RaycastContext.ShapeType.OUTLINE, RaycastContext.FluidHandling.NONE, p));
+        return r != null && r.getType() == HitResult.Type.BLOCK ? r : null;
+    }
+
     /** the sneak key is held during the tick before the placing tick, so the server knows we are sneaking */
     @Override
     public void onPreTick(MinecraftClient mc) {
@@ -120,23 +136,38 @@ public class AutoDripstone extends Module {
         switch (phase) {
             case OPEN -> {
                 BlockState st = mc.world.getBlockState(anchor.getBlockPos());
-                if (!st.get(TrapdoorBlock.OPEN)) use(mc, Hand.MAIN_HAND);
+                if (!st.get(TrapdoorBlock.OPEN)) use(mc, Hand.MAIN_HAND, anchor);
                 phase = Phase.PLACE;
             }
             case PLACE -> {
                 Hand h = dripHand(p);
-                if (h != null) use(mc, h);
+                if (h != null) place(mc, p, h);
                 phase = Phase.CLOSE;
             }
             case CLOSE -> {
-                use(mc, Hand.MAIN_HAND);
+                use(mc, Hand.MAIN_HAND, anchor);
                 phase = Phase.OPEN;
             }
         }
     }
 
-    private void use(MinecraftClient mc, Hand hand) {
-        ActionResult r = mc.interactionManager.interactBlock(mc.player, hand, anchor);
+    private void place(MinecraftClient mc, PlayerEntity p, Hand hand) {
+        BlockHitResult target = anchor;
+        if (placeAt.is("Behind trapdoor")) {
+            BlockHitResult fresh = ray(mc);
+            if (fresh != null && !fresh.getBlockPos().equals(anchor.getBlockPos())) target = fresh;
+        }
+        // clicking a trapdoor without sneaking would only toggle it again - never do that by accident
+        boolean sneaking = p.isSneaking();
+        if (mc.world.getBlockState(target.getBlockPos()).getBlock() instanceof TrapdoorBlock && !sneaking && !sneakPlace.get()) return;
+        boolean was = p.isSneaking();
+        if (sneakPlace.get()) p.setSneaking(true); // client side part of the check; the server gets it from the sneak key
+        use(mc, hand, target);
+        p.setSneaking(was);
+    }
+
+    private void use(MinecraftClient mc, Hand hand, BlockHitResult hit) {
+        ActionResult r = mc.interactionManager.interactBlock(mc.player, hand, hit);
         if (r.isAccepted()) mc.player.swingHand(hand);
     }
 }

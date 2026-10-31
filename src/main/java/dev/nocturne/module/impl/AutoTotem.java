@@ -15,14 +15,43 @@ import net.minecraft.item.Items;
 import net.minecraft.screen.slot.SlotActionType;
 
 public class AutoTotem extends Module {
+    private final ModeSetting mode = add(new ModeSetting("Mode", "Silent", "Silent", "Legit"));
+    private final NumSetting legitSpeed = add(new NumSetting("Legit step (ticks)", 1, 0, 4, 1));
     private final NumSetting health = add(new NumSetting("Health", 20, 1, 20, 1));
     private final NumSetting delay = add(new NumSetting("Delay (ticks)", 1, 0, 10, 1));
     private final BoolSetting hotbarFirst = add(new BoolSetting("Prefer hotbar", true));
     private final BoolSetting counter = add(new BoolSetting("Show count", true));
     private int timer;
+    private int legitPhase, legitWait; // legit mode: 0 idle, 1 inventory open (swap next), 2 swapped (close next)
 
     public AutoTotem() {
         super("AutoTotem", "Keeps a totem in your offhand (Health 20 = always)", Category.COMBAT);
+        legitSpeed.showIf(() -> mode.is("Legit"));
+    }
+
+    @Override protected void onDisable() { legitPhase = 0; }
+
+    private void swap(MinecraftClient mc, PlayerEntity p, int slot) {
+        int id = slot < 9 ? slot + 36 : slot; // inventory index -> player screen-handler slot
+        mc.interactionManager.clickSlot(p.playerScreenHandler.syncId, id, 40, SlotActionType.SWAP, p); // 40 = offhand
+    }
+
+    /**
+     * Legit mode: the inventory really opens, the totem goes to the offhand, the inventory closes.
+     * One step every "Legit step" ticks (0 = all in the same tick, 1 = open / swap / close on three following ticks).
+     */
+    private void legitStep(MinecraftClient mc, PlayerEntity p) {
+        if (!(mc.currentScreen instanceof InventoryScreen)) { legitPhase = 0; return; } // you closed it yourself
+        if (legitWait > 0) { legitWait--; return; }
+        if (legitPhase == 1) {
+            int slot = find(p);
+            if (slot >= 0 && !p.getOffHandStack().isOf(Items.TOTEM_OF_UNDYING)) swap(mc, p, slot);
+            legitPhase = 2;
+            legitWait = legitSpeed.getInt() - 1;
+        } else if (legitPhase == 2) {
+            mc.currentScreen.close(); // sends the close packet like a real player
+            legitPhase = 0;
+        }
     }
 
     private int find(PlayerEntity p) {
@@ -36,7 +65,8 @@ public class AutoTotem extends Module {
     @Override
     public void onTick(MinecraftClient mc) {
         PlayerEntity p = mc.player;
-        if (p == null || mc.interactionManager == null) return;
+        if (p == null || mc.interactionManager == null) { legitPhase = 0; return; }
+        if (legitPhase != 0) { legitStep(mc, p); return; }
         if (mc.currentScreen instanceof HandledScreen && !(mc.currentScreen instanceof InventoryScreen)) return;
         if (p.getOffHandStack().isOf(Items.TOTEM_OF_UNDYING)) { timer = 0; return; }
         if (p.getHealth() + p.getAbsorptionAmount() > health.get()) return;
@@ -45,8 +75,14 @@ public class AutoTotem extends Module {
 
         int slot = find(p);
         if (slot < 0) return;
-        int id = slot < 9 ? slot + 36 : slot; // inventory index -> player screen-handler slot
-        mc.interactionManager.clickSlot(p.playerScreenHandler.syncId, id, 40, SlotActionType.SWAP, p); // 40 = offhand
+        if (mode.is("Legit") && mc.currentScreen == null && !p.isCreative()) {
+            mc.setScreen(new InventoryScreen(p));
+            legitPhase = 1;
+            legitWait = legitSpeed.getInt() - 1;
+            if (legitSpeed.getInt() == 0) { legitStep(mc, p); legitStep(mc, p); } // everything in this tick
+            return;
+        }
+        swap(mc, p, slot);
     }
 
     @Override

@@ -54,6 +54,7 @@ public final class ModuleManager {
         ALL.add(new CustomItemEsp());
         ALL.add(new AutoDripstone());
         ALL.add(new AntiTrap());
+        ALL.add(new DropLock());
         // world
         ALL.add(new WorldFog());
         ALL.add(new TimeChanger());
