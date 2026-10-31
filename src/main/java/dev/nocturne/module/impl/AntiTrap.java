@@ -39,6 +39,7 @@ public class AntiTrap extends Module {
     private final BoolSetting banners = add(new BoolSetting("Banners", true));
     private final BoolSetting signs = add(new BoolSetting("Signs", false));
     private final BoolSetting heads = add(new BoolSetting("Heads / skulls", false));
+    private final BoolSetting noSignGui = add(new BoolSetting("Block sign editor (no text GUI)", true));
     private final EntityListSetting customEntities = add(new EntityListSetting("Custom entities"));
     private final BlockListSetting customBlocks = add(new BlockListSetting("Custom blocks (no hitbox)") {
         @Override public String presetLabel() { return null; }
@@ -54,6 +55,9 @@ public class AntiTrap extends Module {
     }
 
     public static boolean active() { return INSTANCE != null && INSTANCE.isEnabled(); }
+
+    /** true = clicking / placing a sign does not open the text editor */
+    public static boolean blocksSignEditor() { return INSTANCE != null && INSTANCE.isEnabled() && INSTANCE.noSignGui.get(); }
 
     private static String idOf(EntityType<?> t) {
         return IDS.computeIfAbsent(t, k -> Registries.ENTITY_TYPE.getId(k).toString());

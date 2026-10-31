@@ -3,36 +3,60 @@ package dev.nocturne.module.impl;
 import dev.nocturne.module.Category;
 import dev.nocturne.module.Module;
 import dev.nocturne.setting.*;
+import net.minecraft.block.BlockState;
 import net.minecraft.block.TrapdoorBlock;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.option.KeyBinding;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.BlockItem;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
-import net.minecraft.screen.ScreenHandler;
-import net.minecraft.screen.slot.Slot;
-import net.minecraft.screen.slot.SlotActionType;
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.Hand;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.hit.HitResult;
 
 /**
- * While a trapdoor is in your hand:
- *  - Drop:  every dripstone in your inventory is thrown out in one go (whole stacks per click, the fastest possible)
- *  - Place: dripstone from your other hand is placed on the block you look at, every tick
+ * Hold a trapdoor and dripstone, look at a placed trapdoor and do not touch the mouse:
+ * the module OPENS the trapdoor, PLACES dripstone, CLOSES the trapdoor - and repeats, as fast as the server allows.
+ * (placing against a trapdoor needs sneaking, so the sneak key is pressed for exactly the placing tick)
  */
 public class AutoDripstone extends Module {
-    private final ModeSetting action = add(new ModeSetting("Action", "Drop", "Drop", "Place"));
     private final ModeSetting items = add(new ModeSetting("Items", "Both", "Both", "Pointed dripstone", "Dripstone block"));
-    private final BoolSetting needTrapdoor = add(new BoolSetting("Require trapdoor in hand", true));
-    private final ModeSetting amount = add(new ModeSetting("Drop amount", "Whole stacks", "Whole stacks", "Single items"));
-    private final NumSetting clicks = add(new NumSetting("Clicks per run", 64, 1, 128, 1));
+    private final NumSetting stepTicks = add(new NumSetting("Ticks per step", 1, 1, 5, 1));
+    private final BoolSetting needBoth = add(new BoolSetting("Require trapdoor + dripstone in hands", true));
+    private final BoolSetting sneakPlace = add(new BoolSetting("Sneak to place", true));
+
+    private enum Phase { OPEN, PLACE, CLOSE }
+
+    private Phase phase = Phase.OPEN;
+    private BlockHitResult anchor;
+    private int wait;
+    private boolean forcedSneak;
 
     public AutoDripstone() {
-        super("AutoDripstone", "Holding a trapdoor: drops / places dripstone at maximum speed", Category.WORLD);
-        amount.showIf(() -> action.is("Drop"));
-        clicks.showIf(() -> action.is("Drop"));
+        super("AutoDripstone", "Trapdoor + dripstone in hand: open, place, close, repeat", Category.WORLD);
+    }
+
+    @Override protected void onEnable() { reset(); }
+
+    @Override
+    protected void onDisable() {
+        reset();
+        releaseSneak();
+    }
+
+    private void reset() {
+        phase = Phase.OPEN;
+        anchor = null;
+        wait = 0;
+    }
+
+    private void releaseSneak() {
+        if (forcedSneak) {
+            KeyBinding.updatePressedStates(); // hand the key back to the real keyboard state
+            forcedSneak = false;
+        }
     }
 
     private boolean wanted(ItemStack st) {
@@ -48,49 +72,71 @@ public class AutoDripstone extends Module {
         return st.getItem() instanceof BlockItem bi && bi.getBlock() instanceof TrapdoorBlock;
     }
 
+    private Hand dripHand(PlayerEntity p) {
+        if (wanted(p.getOffHandStack())) return Hand.OFF_HAND;
+        if (wanted(p.getMainHandStack())) return Hand.MAIN_HAND;
+        return null;
+    }
+
     private boolean armed(MinecraftClient mc) {
         PlayerEntity p = mc.player;
         if (p == null || mc.world == null || mc.interactionManager == null || mc.currentScreen != null) return false;
-        return !needTrapdoor.get() || trapdoor(p.getMainHandStack()) || trapdoor(p.getOffHandStack());
+        if (dripHand(p) == null) return false;
+        return !needBoth.get() || trapdoor(p.getMainHandStack()) || trapdoor(p.getOffHandStack());
     }
 
-    // dropping is done every tick AND every frame: it finishes instantly, repeating only catches new pickups
-    @Override public void onPreTick(MinecraftClient mc) { if (action.is("Drop") && armed(mc)) drop(mc); }
-    @Override public void onFrame() { if (action.is("Drop") && armed(mc)) drop(mc); }
+    /** the sneak key is held during the tick before the placing tick, so the server knows we are sneaking */
+    @Override
+    public void onPreTick(MinecraftClient mc) {
+        boolean want = sneakPlace.get() && anchor != null && phase == Phase.PLACE && armed(mc);
+        if (want) {
+            mc.options.sneakKey.setPressed(true);
+            forcedSneak = true;
+        } else {
+            releaseSneak();
+        }
+    }
 
     @Override
     public void onTick(MinecraftClient mc) {
-        if (action.is("Place") && armed(mc)) place(mc);
-    }
+        if (!armed(mc)) { reset(); return; }
 
-    private void drop(MinecraftClient mc) {
+        if (phase == Phase.OPEN) {
+            // pick up the trapdoor under the crosshair (so you can re-aim between cycles)
+            if (!(mc.crosshairTarget instanceof BlockHitResult hit) || hit.getType() != HitResult.Type.BLOCK
+                    || !(mc.world.getBlockState(hit.getBlockPos()).getBlock() instanceof TrapdoorBlock)) {
+                anchor = null;
+                return;
+            }
+            anchor = hit;
+        }
+        if (anchor == null) { reset(); return; }
+        if (!(mc.world.getBlockState(anchor.getBlockPos()).getBlock() instanceof TrapdoorBlock)) { reset(); return; }
+
+        if (wait > 0) { wait--; return; }
+        wait = stepTicks.getInt() - 1;
+
         PlayerEntity p = mc.player;
-        ScreenHandler h = p.playerScreenHandler;
-        int budget = clicks.getInt();
-        boolean whole = amount.is("Whole stacks");
-        for (Slot s : h.slots) {
-            if (budget <= 0) break;
-            if (s.id < 9 || s.id > 45) continue; // inventory, hotbar and offhand only - never armor / crafting
-            ItemStack st = s.getStack();
-            if (!wanted(st)) continue;
-            if (whole) {
-                mc.interactionManager.clickSlot(h.syncId, s.id, 1, SlotActionType.THROW, p); // button 1 = the whole stack
-                budget--;
-            } else {
-                for (int n = st.getCount(); n > 0 && budget > 0; n--) {
-                    mc.interactionManager.clickSlot(h.syncId, s.id, 0, SlotActionType.THROW, p);
-                    budget--;
-                }
+        switch (phase) {
+            case OPEN -> {
+                BlockState st = mc.world.getBlockState(anchor.getBlockPos());
+                if (!st.get(TrapdoorBlock.OPEN)) use(mc, Hand.MAIN_HAND);
+                phase = Phase.PLACE;
+            }
+            case PLACE -> {
+                Hand h = dripHand(p);
+                if (h != null) use(mc, h);
+                phase = Phase.CLOSE;
+            }
+            case CLOSE -> {
+                use(mc, Hand.MAIN_HAND);
+                phase = Phase.OPEN;
             }
         }
     }
 
-    private void place(MinecraftClient mc) {
-        PlayerEntity p = mc.player;
-        Hand hand = wanted(p.getOffHandStack()) ? Hand.OFF_HAND : wanted(p.getMainHandStack()) ? Hand.MAIN_HAND : null;
-        if (hand == null) return;
-        if (!(mc.crosshairTarget instanceof BlockHitResult hit) || hit.getType() != HitResult.Type.BLOCK) return;
-        ActionResult r = mc.interactionManager.interactBlock(mc.player, hand, hit);
-        if (r.isAccepted()) p.swingHand(hand);
+    private void use(MinecraftClient mc, Hand hand) {
+        ActionResult r = mc.interactionManager.interactBlock(mc.player, hand, anchor);
+        if (r.isAccepted()) mc.player.swingHand(hand);
     }
 }
