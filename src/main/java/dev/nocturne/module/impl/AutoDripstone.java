@@ -20,36 +20,35 @@ import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.Vec3d;
+import org.lwjgl.glfw.GLFW;
 
 /**
- * Automatic dripstone dropping. The trick: a pointed dripstone hangs under a CLOSED trapdoor; when the trapdoor
- * is OPENED the dripstone loses its support and falls. Hold a trapdoor and dripstone, aim at the placed trapdoor
- * (or at the dripstone hanging under it) and keep the mouse still. The module repeats:
+ * HOLD the right mouse button with the crosshair on a placed trapdoor (or on the dripstone hanging under it),
+ * holding a trapdoor and dripstone. Nothing else - no crouching, no clicking. The module repeats:
  *
- *   PLACE dripstone against the underside of the trapdoor (needs sneaking: the sneak key is held for that tick)
- *   OPEN  the trapdoor  -> the dripstone falls
- *   CLOSE the trapdoor  -> ready for the next one
+ *   PLACE dripstone under the trapdoor   (the module sneaks by itself for that one tick)
+ *   OPEN + CLOSE the trapdoor in the same tick -> the dripstone loses its support and falls
  *
- * It waits for the old dripstone to be gone before placing the next one, so it runs exactly as fast as the server allows.
+ * One cycle is "Cycle ticks" long (3 = the fastest that works on most servers; the dripstone needs 2 ticks to fall).
+ * Vanilla right-click is switched off while the module works, so nothing toggles the trapdoor by accident.
  */
 public class AutoDripstone extends Module {
     private final ModeSetting items = add(new ModeSetting("Items", "Both", "Both", "Pointed dripstone", "Dripstone block"));
-    private final NumSetting stepTicks = add(new NumSetting("Ticks per step", 1, 1, 5, 1));
+    private final NumSetting cycleTicks = add(new NumSetting("Cycle ticks", 3, 2, 8, 1));
+    private final BoolSetting waitFree = add(new BoolSetting("Wait until slot is free", false));
     private final BoolSetting needBoth = add(new BoolSetting("Require trapdoor + dripstone in hands", true));
-    private final BoolSetting sneakPlace = add(new BoolSetting("Sneak to place", true));
     private final BoolSetting debug = add(new BoolSetting("Debug (action bar)", false));
 
-    private enum Phase { PLACE, OPEN, CLOSE }
+    private enum Phase { PLACE, OPENCLOSE }
 
     private Phase phase = Phase.PLACE;
     private BlockHitResult anchor;
-    private int wait, gate;
-    private boolean forcedSneak;
+    private int delay, gate, cycles;
+    private boolean forcedSneak, takenOver;
     private String lastMsg = "";
-    private int cycles;
 
     public AutoDripstone() {
-        super("AutoDripstone", "Trapdoor + dripstone: place, open (it falls), close, repeat", Category.WORLD);
+        super("AutoDripstone", "Hold right mouse on a trapdoor: place dripstone, open + close, repeat", Category.WORLD);
     }
 
     @Override protected void onEnable() { reset(); }
@@ -57,28 +56,28 @@ public class AutoDripstone extends Module {
     @Override
     protected void onDisable() {
         reset();
-        releaseSneak();
+        giveBackKeys();
     }
 
     private void reset() {
         phase = Phase.PLACE;
         anchor = null;
-        wait = 0;
+        delay = 0;
         gate = 0;
     }
 
-    /** debug line in the action bar; identical consecutive messages are shown once unless forced */
+    private void giveBackKeys() {
+        if (forcedSneak || takenOver) {
+            KeyBinding.updatePressedStates(); // hand the keys back to the real keyboard / mouse state
+            forcedSneak = false;
+            takenOver = false;
+        }
+    }
+
     private void say(MinecraftClient mc, String msg, boolean force) {
         if (!debug.get() || mc.player == null || (!force && msg.equals(lastMsg))) return;
         lastMsg = msg;
         mc.player.sendMessage(Text.literal("[AutoDripstone] " + msg), true);
-    }
-
-    private void releaseSneak() {
-        if (forcedSneak) {
-            KeyBinding.updatePressedStates(); // hand the key back to the real keyboard state
-            forcedSneak = false;
-        }
     }
 
     // ------------------------------------------------------------------ helpers
@@ -109,7 +108,11 @@ public class AutoDripstone extends Module {
         return !needBoth.get() || trapdoor(p.getMainHandStack()) || trapdoor(p.getOffHandStack());
     }
 
-    /** where the dripstone goes: the block next to the face we click (the cell under a ceiling trapdoor) */
+    /** the real state of the right mouse button (vanilla's own use key is switched off while we work) */
+    private static boolean rightHeld(MinecraftClient mc) {
+        return GLFW.glfwGetMouseButton(mc.getWindow().getHandle(), GLFW.GLFW_MOUSE_BUTTON_RIGHT) == GLFW.GLFW_PRESS;
+    }
+
     private BlockPos slot() { return anchor.getBlockPos().offset(anchor.getSide()); }
 
     private boolean isTrapdoor(MinecraftClient mc) {
@@ -145,78 +148,89 @@ public class AutoDripstone extends Module {
 
     // ------------------------------------------------------------------ logic
 
-    /** the sneak key is held during the tick before the placing tick, so the server knows we are sneaking */
+    /**
+     * Runs before the game reads the keys: takes the right mouse button away from vanilla and presses sneak for
+     * the placing tick only (the sneak packet then reaches the server before our click in the same tick).
+     */
     @Override
     public void onPreTick(MinecraftClient mc) {
-        boolean want = sneakPlace.get() && anchor != null && phase == Phase.PLACE && armed(mc);
-        if (want) {
+        boolean active = rightHeld(mc) && armed(mc);
+
+        boolean sneak = active && anchor != null && phase == Phase.PLACE && delay == 0;
+        if (sneak) {
             mc.options.sneakKey.setPressed(true);
             forcedSneak = true;
-        } else {
-            releaseSneak();
+        } else if (forcedSneak) {
+            KeyBinding.updatePressedStates();
+            forcedSneak = false;
+            takenOver = false; // updatePressedStates() gave the use key back too - it is taken again just below
+        }
+
+        if (active) {
+            mc.options.useKey.setPressed(false);
+            while (mc.options.useKey.wasPressed()) { /* eat queued clicks */ }
+            takenOver = true;
+        } else if (takenOver) {
+            KeyBinding.updatePressedStates();
+            takenOver = false;
         }
     }
 
     @Override
     public void onTick(MinecraftClient mc) {
-        if (!armed(mc)) { say(mc, "waiting: hold a trapdoor AND dripstone, no screen open", false); reset(); return; }
+        if (!rightHeld(mc) || !armed(mc)) {
+            if (anchor != null) say(mc, "stopped (hold right mouse, trapdoor + dripstone in hands)", false);
+            reset();
+            return;
+        }
         PlayerEntity p = mc.player;
 
         BlockHitResult seen = mc.crosshairTarget instanceof BlockHitResult h && h.getType() == HitResult.Type.BLOCK ? trapdoorAt(mc, h) : null;
         if (anchor == null || (seen != null && !seen.getBlockPos().equals(anchor.getBlockPos()))) {
             if (seen == null) { say(mc, "aim at a trapdoor (or the dripstone hanging under it)", false); return; }
             anchor = seen;
-            wait = 0;
+            delay = 0;
             gate = 0;
-            phase = isOpen(mc) ? Phase.CLOSE : slotHasDrip(mc) ? Phase.OPEN : Phase.PLACE; // continue from what is there
+            phase = slotHasDrip(mc) || isOpen(mc) ? Phase.OPENCLOSE : Phase.PLACE; // continue from what is there
             say(mc, "trapdoor found, starting with " + phase + " (slot " + slot().toShortString() + ", side " + anchor.getSide() + ")", true);
         }
         if (!isTrapdoor(mc)) { reset(); return; }
 
-        if (wait > 0) { wait--; return; }
-        if (phase == Phase.PLACE && sneakPlace.get() && !forcedSneak) return; // sneak has not reached the server yet
+        if (delay > 0) { delay--; return; }
 
-        int pause = stepTicks.getInt() - 1;
         switch (phase) {
             case PLACE -> {
-                if (!slotFree(mc) && ++gate < 20) { say(mc, "waiting: the slot under the trapdoor is not free yet", false); return; } // previous dripstone still falling
+                if (!forcedSneak) return; // the sneak key was not down at the start of this tick yet - next tick
+                if (waitFree.get() && !slotFree(mc) && ++gate < 40) { say(mc, "waiting: slot under the trapdoor is not free", false); return; }
                 gate = 0;
                 Hand hand = dripHand(p);
                 if (hand != null) say(mc, "#" + (++cycles) + " PLACE -> " + place(mc, p, hand), true);
-                phase = Phase.OPEN;
-                wait = pause;
+                phase = Phase.OPENCLOSE;
+                delay = 0;
             }
-            case OPEN -> {
-                if (isOpen(mc)) {
-                    phase = Phase.CLOSE;
-                } else if (!slotHasDrip(mc)) {
-                    phase = Phase.PLACE; // nothing hangs there yet (placing failed) - try again
-                    wait = pause;
-                } else {
-                    say(mc, "OPEN -> " + use(mc, Hand.MAIN_HAND, anchor), true); // the dripstone loses its support and falls
-                    phase = Phase.CLOSE;
-                    wait = pause;
-                }
-            }
-            case CLOSE -> {
-                if (isOpen(mc)) say(mc, "CLOSE -> " + use(mc, Hand.MAIN_HAND, anchor), true);
+            case OPENCLOSE -> {
+                if (!slotHasDrip(mc) && !isOpen(mc)) { phase = Phase.PLACE; delay = 0; return; } // nothing hangs there: place again
+                boolean wasOpen = isOpen(mc);
+                use(mc, Hand.MAIN_HAND, anchor, true);               // open (or close, if it was left open)
+                if (!wasOpen) use(mc, Hand.MAIN_HAND, anchor, false); // ...and close again in the same tick
+                say(mc, "OPEN+CLOSE", false);
                 phase = Phase.PLACE;
-                wait = pause;
+                delay = Math.max(0, cycleTicks.getInt() - 2);
             }
         }
     }
 
     private ActionResult place(MinecraftClient mc, PlayerEntity p, Hand hand) {
         boolean was = p.isSneaking();
-        if (sneakPlace.get()) p.setSneaking(true); // client side part of the check; the server gets it from the sneak key
-        ActionResult r = use(mc, hand, anchor);
+        p.setSneaking(true); // client side half of the check; the server got the sneak from the key
+        ActionResult r = use(mc, hand, anchor, true);
         p.setSneaking(was);
         return r;
     }
 
-    private ActionResult use(MinecraftClient mc, Hand hand, BlockHitResult hit) {
+    private ActionResult use(MinecraftClient mc, Hand hand, BlockHitResult hit, boolean swing) {
         ActionResult r = mc.interactionManager.interactBlock(mc.player, hand, hit);
-        if (r.isAccepted()) mc.player.swingHand(hand);
+        if (swing && r.isAccepted()) mc.player.swingHand(hand);
         return r;
     }
 }
